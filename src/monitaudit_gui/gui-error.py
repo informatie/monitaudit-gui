@@ -1,4 +1,4 @@
-# app.py
+# gui-error.py
 
 from __future__ import annotations
 
@@ -34,9 +34,7 @@ def load_catalogue(
             "r",
             encoding="utf-8",
         ) as file:
-            data: Any = yaml.safe_load(
-                file
-            )
+            data: Any = yaml.safe_load(file)
 
     except yaml.YAMLError as exception:
         raise ValueError(
@@ -48,10 +46,7 @@ def load_catalogue(
             f"Could not read error catalogue: {path}"
         ) from exception
 
-    if not isinstance(
-        data,
-        dict,
-    ):
+    if not isinstance(data, dict):
         raise ValueError(
             "Error catalogue root must be a mapping."
         )
@@ -118,16 +113,16 @@ def values_for(
     errors: dict[str, dict[str, Any]],
     field: str,
 ) -> list[str]:
-    return sorted(
-        {
-            str(value)
-            for error in errors.values()
-            if (
-                value := error.get(field)
-            )
-            is not None
-        }
-    )
+    values = {
+        str(value)
+        for error in errors.values()
+        if (
+            value := error.get(field)
+        )
+        is not None
+    }
+
+    return sorted(values)
 
 
 def sequence_values(
@@ -163,23 +158,11 @@ def matches_search(
         error.get("context")
     )
 
-    fields = [
+    searchable_fields = [
         code,
         str(
             error.get(
                 "title",
-                "",
-            )
-        ),
-        str(
-            error.get(
-                "description",
-                "",
-            )
-        ),
-        str(
-            error.get(
-                "solution",
                 "",
             )
         ),
@@ -203,6 +186,18 @@ def matches_search(
         ),
         str(
             error.get(
+                "description",
+                "",
+            )
+        ),
+        str(
+            error.get(
+                "solution",
+                "",
+            )
+        ),
+        str(
+            error.get(
                 "exception",
                 "",
             )
@@ -212,7 +207,7 @@ def matches_search(
     ]
 
     searchable = " ".join(
-        fields
+        searchable_fields
     ).casefold()
 
     return query in searchable
@@ -232,39 +227,42 @@ def filter_errors(
     ] = {}
 
     for code, error in errors.items():
+        error_category = str(
+            error.get(
+                "category",
+                "",
+            )
+        )
+
+        error_severity = str(
+            error.get(
+                "severity",
+                "",
+            )
+        )
+
+        error_status = str(
+            error.get(
+                "status",
+                "",
+            )
+        )
+
         if (
             category != ALL_FILTER_VALUE
-            and str(
-                error.get(
-                    "category",
-                    "",
-                )
-            )
-            != category
+            and error_category != category
         ):
             continue
 
         if (
             severity != ALL_FILTER_VALUE
-            and str(
-                error.get(
-                    "severity",
-                    "",
-                )
-            )
-            != severity
+            and error_severity != severity
         ):
             continue
 
         if (
             status != ALL_FILTER_VALUE
-            and str(
-                error.get(
-                    "status",
-                    "",
-                )
-            )
-            != status
+            and error_status != status
         ):
             continue
 
@@ -329,6 +327,16 @@ def display_catalogue_metadata(
         ),
     )
 
+    st.sidebar.write(
+        "**Resolution policy:**",
+        str(
+            metadata.get(
+                "resolution_policy",
+                "-",
+            )
+        ),
+    )
+
     st.sidebar.metric(
         "Error definitions",
         error_count,
@@ -339,7 +347,10 @@ def display_context(
     error: dict[str, Any],
 ) -> None:
     context = sequence_values(
-        error.get("context"der(
+        error.get("context")
+    )
+
+    st.subheader(
         "Runtime context"
     )
 
@@ -432,6 +443,7 @@ def display_error(
     st.subheader(
         "Description"
     )
+
     st.write(
         str(
             error.get(
@@ -444,6 +456,7 @@ def display_error(
     st.subheader(
         "Solution"
     )
+
     st.write(
         str(
             error.get(
@@ -486,10 +499,7 @@ def display_error(
                     False,
                 )
             ),
-        )
-
-        st.write(
-            "**Introduced:**",
+                   "**Introduced:**",
             str(
                 error.get(
                     "introduced",
@@ -506,9 +516,11 @@ def display_error(
         deprecated = error.get(
             "deprecated"
         )
+
         replaced_by = error.get(
             "replaced_by"
         )
+
         documentation = error.get(
             "documentation"
         )
@@ -565,6 +577,69 @@ def display_error(
         )
 
 
+def display_filters(
+    errors: dict[str, dict[str, Any]],
+) -> tuple[
+    str,
+    str,
+    str,
+    str,
+]:
+    st.sidebar.divider()
+
+    st.sidebar.header(
+        "Filters"
+    )
+
+    search = st.sidebar.text_input(
+        "Search",
+        placeholder=(
+            "MTA-00419, Delta, "
+            "configuration..."
+        ),
+    )
+
+    category = st.sidebar.selectbox(
+        "Category",
+        options=[
+            ALL_FILTER_VALUE,
+            *values_for(
+                errors,
+                "category",
+            ),
+        ],
+    )
+
+    severity = st.sidebar.selectbox(
+        "Severity",
+        options=[
+            ALL_FILTER_VALUE,
+            *values_for(
+                errors,
+                "severity",
+            ),
+        ],
+    )
+
+    status = st.sidebar.selectbox(
+        "Status",
+        options=[
+            ALL_FILTER_VALUE,
+            *values_for(
+                errors,
+                "status",
+            ),
+        ],
+    )
+
+    return (
+        search,
+        category,
+        severity,
+        status,
+    )
+
+
 def main() -> None:
     st.set_page_config(
         page_title=(
@@ -616,51 +691,13 @@ def main() -> None:
         len(errors),
     )
 
-    st.sidebar.divider()
-
-    st.sidebar.header(
-        "Filters"
-    )
-
-    search = st.sidebar.text_input(
-        "Search",
-        placeholder=(
-            "MTA-00419, Delta, "
-            "configuration..."
-        ),
-    )
-
-    category = st.sidebar.selectbox(
-        "Category",
-        options=[
-            ALL_FILTER_VALUE,
-            *values_for(
-                errors,
-                "category",
-            ),
-        ],
-    )
-
-    severity = st.sidebar.selectbox(
-        "Severity",
-        options=[
-            ALL_FILTER_VALUE,
-            *values_for(
-                errors,
-                "severity",
-            ),
-        ],
-    )
-
-    status = st.sidebar.selectbox(
-        "Status",
-        options=[
-            ALL_FILTER_VALUE,
-            *values_for(
-                errors,
-                "status",
-            ),
-        ],
+    (
+        search,
+        category,
+        severity,
+        status,
+    ) = display_filters(
+        errors
     )
 
     filtered_errors = filter_errors(
